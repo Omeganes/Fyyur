@@ -9,6 +9,7 @@ import babel
 from flask import Flask, render_template, request, flash, redirect, url_for, abort
 from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import func
 from flask_migrate import Migrate
 import logging
 from logging import Formatter, FileHandler
@@ -34,22 +35,23 @@ class Venue(db.Model):
     __tablename__ = 'Venue'
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String)
-    city = db.Column(db.String(120))
-    state = db.Column(db.String(120))
-    address = db.Column(db.String(120))
-    phone = db.Column(db.String(120))
+    name = db.Column(db.String, nullable=False)
+    city = db.Column(db.String(120), nullable=False)
+    state = db.Column(db.String(120), nullable=False)
+    address = db.Column(db.String(120), nullable=False)
+    phone = db.Column(db.String(120), nullable=False)
     image_link = db.Column(db.String(500))
-    facebook_link = db.Column(db.String(120))
-    genres = db.Column(db.String(120))
+    facebook_link = db.Column(db.String(120), nullable=False)
+    genres = db.Column(db.String(120), nullable=False)
     shows = db.relationship('Show', backref='Venue', lazy=True)
 
-    def __init__(self, name, city, state, address, phone, image_link, facebook_link):
+    def __init__(self, name, city, state, address, phone, genres, facebook_link):
         self.name = name
         self.city = city
         self.state = state
         self.address = address
         self.phone = phone
+        self.genres = genres
         self.facebook_link = facebook_link
         
 
@@ -58,14 +60,22 @@ class Artist(db.Model):
     __tablename__ = 'Artist'
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String)
-    city = db.Column(db.String(120))
-    state = db.Column(db.String(120))
-    phone = db.Column(db.String(120))
-    genres = db.Column(db.String(120))
+    name = db.Column(db.String, nullable=False)
+    city = db.Column(db.String(120), nullable=False)
+    state = db.Column(db.String(120), nullable=False)
+    phone = db.Column(db.String(120), nullable=False)
+    genres = db.Column(db.String(120), nullable=False)
     image_link = db.Column(db.String(500))
-    facebook_link = db.Column(db.String(120))
+    facebook_link = db.Column(db.String(120), nullable=False)
     shows = db.relationship('Show', backref='Artist', lazy=True)
+
+    def __init__(self, name, city, state, phone, genres, facebook_link):
+        self.name = name
+        self.city = city
+        self.state = state
+        self.phone = phone
+        self.genres = genres
+        self.facebook_link = facebook_link
 
 
 class Show(db.Model):
@@ -104,44 +114,47 @@ def index():
 
 @app.route('/venues')
 def venues():
-    # TODO: replace with real venues data.
-    #       num_shows should be aggregated based on number of upcoming shows per venue.
-    data=[{
-        "city": "San Francisco",
-        "state": "CA",
-        "venues": [{
-        "id": 1,
-        "name": "The Musical Hop",
-        "num_upcoming_shows": 0,
-        }, {
-        "id": 3,
-        "name": "Park Square Live Music & Coffee",
-        "num_upcoming_shows": 1,
-        }]
-    }, {
-        "city": "New York",
-        "state": "NY",
-        "venues": [{
-        "id": 2,
-        "name": "The Dueling Pianos Bar",
-        "num_upcoming_shows": 0,
-        }]
-    }]
-    return render_template('pages/venues.html', areas=data);
+    areas = []
+    venues = Venue.query.all()
+    cities = []
+    for venue in venues:
+        if venue.city not in cities:
+            cities.append(venue.city)
+            areas.append(
+                {
+                    "city": venue.city,
+                    "state": venue.state,
+                    "venues": []
+                }
+            )
+    for venue in venues:
+        for area in areas:
+            if venue.city == area['city'] and venue.state == area['state']:
+                area['venues'].append(
+                    {
+                        "id": venue.id,
+                        "name": venue.name,
+                        "num_upcoming_shows": len(venue.shows),
+                    }
+                )
+                break
+    return render_template('pages/venues.html', areas=areas);
 
 @app.route('/venues/search', methods=['POST'])
 def search_venues():
-    # TODO: implement search on artists with partial string search. Ensure it is case-insensitive.
-    # seach for Hop should return "The Musical Hop".
-    # search for "Music" should return "The Musical Hop" and "Park Square Live Music & Coffee"
+    venues = Venue.query.filter(func.lower(Venue.name).like('%' + func.lower(request.form['search_term']) + '%')).order_by(Venue.name).all()
     response={
-        "count": 1,
-        "data": [{
-        "id": 2,
-        "name": "The Dueling Pianos Bar",
-        "num_upcoming_shows": 0,
-        }]
+        "count": len(venues),
+        "data": []
     }
+    for venue in venues:
+        response['data'].append(
+            {
+                "id": venue.id,
+                "name": venue.name,
+                "num_upcoming_shows": len(venue.shows)
+            }
+        )
     return render_template('pages/search_venues.html', results=response, search_term=request.form.get('search_term', ''))
 
 @app.route('/venues/<int:venue_id>')
@@ -238,8 +251,6 @@ def create_venue_form():
 
 @app.route('/venues/create', methods=['POST'])
 def create_venue_submission():
-    # TODO: insert form data as a new Venue record in the db, instead
-    # TODO: modify data to be the data object returned from db insertion
     venue_form = VenueForm(request.form)
     error = False
     if (venue_form.validate_on_submit()):
@@ -247,18 +258,12 @@ def create_venue_submission():
             name = request.form['name']
             city = request.form['city']
             state = request.form['state']
-            print(state)
             address = request.form['address']
             phone = request.form['phone']
             genres = request.form.getlist('genres')
             facebook_link = request.form['facebook_link']
             venue = Venue(
-                name = name,
-                city = city,
-                state = state,
-                address = address,
-                phone = phone,
-                facebook_link = facebook_link
+                name, city, state, address, phone, genres, facebook_link
             )
             db.session.add(venue)
             db.session.commit()
