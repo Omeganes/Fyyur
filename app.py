@@ -70,6 +70,9 @@ class Artist(db.Model):
     genres = db.Column(db.String(120), nullable=False)
     image_link = db.Column(db.String(500))
     facebook_link = db.Column(db.String(120), nullable=False)
+    website = db.Column(db.String(120))
+    seeking_venue = db.Column(db.Boolean, nullable=False, default=False)
+    seeking_description = db.Column(db.String(500))
     shows = db.relationship('Show', backref='Artist', lazy=True)
 
     def __init__(self, name, city, state, phone, genres, facebook_link):
@@ -204,7 +207,7 @@ def show_venue(venue_id):
                             "artist_id": show.artist.id,
                             "artist_name": show.artist.name,
                             "artist_image_link": show.artist.image_link,
-                            "start_time": show.start_time
+                            "start_time": str(show.start_time)
                         }
                     )
                 else:
@@ -304,23 +307,81 @@ def artists():
 
 @app.route('/artists/search', methods=['POST'])
 def search_artists():
-    # TODO: implement search on artists with partial string search. Ensure it is case-insensitive.
-    # seach for "A" should return "Guns N Petals", "Matt Quevado", and "The Wild Sax Band".
-    # search for "band" should return "The Wild Sax Band".
+    artists = Artist.query.filter(func.lower(Artist.name).like('%' + func.lower(request.form['search_term']) + '%')).order_by(Artist.name).all()
     response={
-        "count": 1,
-        "data": [{
-        "id": 4,
-        "name": "Guns N Petals",
-        "num_upcoming_shows": 0,
-        }]
+        "count": len(artists),
+        "data": []
     }
+    for artist in artists:
+        response['data'].append(
+            {
+                "id": artist.id,
+                "name": artist.name,
+                "num_upcoming_shows": len(artist.shows)
+            }
+        )
     return render_template('pages/search_artists.html', results=response, search_term=request.form.get('search_term', ''))
 
 @app.route('/artists/<int:artist_id>')
 def show_artist(artist_id):
     # shows the venue page with the given venue_id
     # TODO: replace with real venue data from the venues table, using venue_id
+    data = {}
+    error = False
+    found = False
+    try:
+        artist = Artist.query.get(artist_id)
+        if artist:
+            found = True
+            data = {
+                "id": artist.id,
+                "name": artist.name,
+                "genres": artist.genres[1:-1].split(','),
+                "city": artist.city,
+                "state": artist.state,
+                "phone": artist.phone,
+                "website": artist.website,
+                "facebook_link": artist.facebook_link,
+                "seeking_venue": artist.seeking_venue,
+                "seeking_description": artist.seeking_description,
+                "image_link": artist.image_link,
+                "past_shows": [],
+                "upcoming_shows": [],
+                "past_shows_count": 0,
+                "upcoming_shows_count": 0,
+            }
+            for show in artist.shows:
+                if show.start_time > datetime.today():
+                    data['upcoming_shows_count'] +=1
+                    data['upcoming_shows'].append(
+                        {
+                            "venue_id": show.venue.id,
+                            "venue_name": show.venue.name,
+                            "venue_image_link": show.venue.image_link,
+                            "start_time": str(show.start_time)
+                        }
+                    )
+                else:
+                    data['past_shows_count'] +=1
+                    data['past_shows'].append(
+                        {
+                            "venue_id": show.venue.id,
+                            "venue_name": show.venue.name,
+                            "venue_image_link": show.venue.image_link,
+                            "start_time": str(show.start_time)
+                        }
+                    )
+    except:
+        error = True
+        print(sys.exc_info())
+    if error:
+        abort(400)
+    elif not found:
+        flash('Oops.. Not Found')
+        return redirect(redirect_url())
+
+
+
     data1={
         "id": 4,
         "name": "Guns N Petals",
@@ -334,10 +395,10 @@ def show_artist(artist_id):
         "seeking_description": "Looking for shows to perform at in the San Francisco Bay Area!",
         "image_link": "https://images.unsplash.com/photo-1549213783-8284d0336c4f?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=300&q=80",
         "past_shows": [{
-        "venue_id": 1,
-        "venue_name": "The Musical Hop",
-        "venue_image_link": "https://images.unsplash.com/photo-1543900694-133f37abaaa5?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=400&q=60",
-        "start_time": "2019-05-21T21:30:00.000Z"
+            "venue_id": 1,
+            "venue_name": "The Musical Hop",
+            "venue_image_link": "https://images.unsplash.com/photo-1543900694-133f37abaaa5?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=400&q=60",
+            "start_time": "2019-05-21T21:30:00.000Z"
         }],
         "upcoming_shows": [],
         "past_shows_count": 1,
@@ -374,20 +435,20 @@ def show_artist(artist_id):
         "image_link": "https://images.unsplash.com/photo-1558369981-f9ca78462e61?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=794&q=80",
         "past_shows": [],
         "upcoming_shows": [{
-        "venue_id": 3,
-        "venue_name": "Park Square Live Music & Coffee",
-        "venue_image_link": "https://images.unsplash.com/photo-1485686531765-ba63b07845a7?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=747&q=80",
-        "start_time": "2035-04-01T20:00:00.000Z"
-        }, {
-        "venue_id": 3,
-        "venue_name": "Park Square Live Music & Coffee",
-        "venue_image_link": "https://images.unsplash.com/photo-1485686531765-ba63b07845a7?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=747&q=80",
-        "start_time": "2035-04-08T20:00:00.000Z"
-        }, {
-        "venue_id": 3,
-        "venue_name": "Park Square Live Music & Coffee",
-        "venue_image_link": "https://images.unsplash.com/photo-1485686531765-ba63b07845a7?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=747&q=80",
-        "start_time": "2035-04-15T20:00:00.000Z"
+            "venue_id": 3,
+            "venue_name": "Park Square Live Music & Coffee",
+            "venue_image_link": "https://images.unsplash.com/photo-1485686531765-ba63b07845a7?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=747&q=80",
+            "start_time": "2035-04-01T20:00:00.000Z"
+            }, {
+            "venue_id": 3,
+            "venue_name": "Park Square Live Music & Coffee",
+            "venue_image_link": "https://images.unsplash.com/photo-1485686531765-ba63b07845a7?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=747&q=80",
+            "start_time": "2035-04-08T20:00:00.000Z"
+            }, {
+            "venue_id": 3,
+            "venue_name": "Park Square Live Music & Coffee",
+            "venue_image_link": "https://images.unsplash.com/photo-1485686531765-ba63b07845a7?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=747&q=80",
+            "start_time": "2035-04-15T20:00:00.000Z"
         }],
         "past_shows_count": 0,
         "upcoming_shows_count": 3,
