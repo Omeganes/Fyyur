@@ -4,6 +4,7 @@
   <div class="form-wrapper">
     <form method="post" class="form">
       <h3 class="form-heading">List a new show</h3>
+      {{ form.hidden_tag() }}
       <div class="form-group">
         <label for="artist_id">Artist ID</label>
         <small>ID can be found on the Artist's Page</small>

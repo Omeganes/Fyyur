@@ -2,6 +2,7 @@
 # Imports
 #----------------------------------------------------------------------------#
 
+from datetime import datetime
 from operator import add
 import sys
 import dateutil.parser
@@ -265,6 +266,7 @@ def create_venue_submission():
             db.session.close()
     else:
         error = True
+
     if error:
         flash('An error occurred. Venue ' + request.form['name'] + ' could not be listed.')
     else:
@@ -555,13 +557,35 @@ def create_shows():
 def create_show_submission():
     # called to create new shows in the db, upon submitting new show listing form
     # TODO: insert form data as a new Show record in the db, instead
+    show_form = ShowForm(request.form)
+    error = False
+    print(show_form.errors)
+    if (show_form.validate_on_submit()):
+        try:
+            artist_id = request.form['artist_id']
+            venue_id = request.form['venue_id']
+            start_time = datetime.strptime(request.form['start_time'], '%Y-%m-%d %H:%M:%S')
+            show = Show(
+                artist_id, venue_id, start_time
+            )
+            db.session.add(show)
+            db.session.commit()
+        except:
+            db.session.rollback()
+            error = True
+            flash('An error occurred. Show could not be listed! \n Check if the ID\'s you entered are valid.')
+            print(sys.exc_info())
+        finally:
+            db.session.close()
+    else:
+        flash('Enter valid information!')
+        error = True
 
-    # on successful db insert, flash success
-    flash('Show was successfully listed!')
-    # TODO: on unsuccessful db insert, flash an error instead.
-    # e.g., flash('An error occurred. Show could not be listed.')
-    # see: http://flask.pocoo.org/docs/1.0/patterns/flashing/
-    return render_template('pages/home.html')
+    if error:
+        return redirect(url_for('create_shows'))
+    else:
+        flash('Show was successfully listed!')
+        return render_template('pages/home.html')
 
 @app.errorhandler(404)
 def not_found_error(error):
